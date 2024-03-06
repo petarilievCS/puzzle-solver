@@ -14,22 +14,35 @@ def main():
 
     island_map = find_islands(map)
     bridge_map, bridge_indices, bridge_starts, bridge_ends = find_bridges(map)
-
     bridge_connectedness = find_connectedness(bridge_starts, bridge_ends)
-    # print(bridge_connectedness)
-    bridge_length = find_bridge_length(bridge_starts, bridge_ends)
     bridge_overlaps = find_overlaps(bridge_indices)
+    connections = find_bridge_connections(bridge_starts, bridge_ends)
 
     # Order bridges
     bridge_order = sorted(bridge_connectedness, key=bridge_connectedness.get)
 
     start = time.time()
-    backtrack(0, island_map, bridge_map, bridge_indices, bridge_starts, bridge_ends, len(island_map), bridge_order, bridge_overlaps, set(), bridge_connectedness)
+    backtrack(0, island_map, bridge_map, bridge_indices, bridge_starts, bridge_ends, len(island_map), bridge_order, bridge_overlaps, set(), bridge_connectedness, connections)
     end = time.time()
     print(f"Time: {end - start}\n")
 
     # Print solution
     print_solution(map, bridge_map, bridge_starts, bridge_ends, bridge_indices)
+
+# Finds which bridge is connected to which bridge
+def find_bridge_connections(bridge_starts, bridge_ends):
+    connections = {}
+    for bridge in bridge_starts:
+        start = bridge_starts[bridge]
+        end = bridge_ends[bridge]
+        connections[bridge] = []
+        for other_bridge in bridge_starts:
+            if other_bridge != bridge:
+                other_start = bridge_starts[other_bridge]
+                other_end = bridge_ends[other_bridge]
+                if start == other_start or start == other_end or end == other_start or end == other_end:
+                    connections[bridge].append(other_bridge)
+    return connections
 
 # Finds the length of each bridge
 def find_bridge_length(bridge_starts, bridge_ends):
@@ -116,7 +129,18 @@ def find_least_connected(bridge_connectedness, occupied):
     return bridge
 
 # Searches for solution 
-def backtrack(bridge_idx, island_map, bridge_map, bridge_indices, bridge_starts, bridge_ends, remaining_islands, bridge_order, bridge_overlaps, occupied, bridge_connectedness):
+def backtrack(bridge_idx, 
+              island_map, 
+              bridge_map,
+              bridge_indices, 
+              bridge_starts, 
+              bridge_ends, 
+              remaining_islands, 
+              bridge_order, 
+              bridge_overlaps, 
+              occupied, 
+              bridge_connectedness,
+              connections):
     
     # Base case - solution found
     if remaining_islands == 0:
@@ -127,15 +151,17 @@ def backtrack(bridge_idx, island_map, bridge_map, bridge_indices, bridge_starts,
         return False
     
     # Find next free bridge
-    # current_bridge = bridge_order[bridge_idx]
-    # while current_bridge in occupied:
-    #     bridge_idx += 1
-    #     if bridge_idx == len(bridge_map):
-    #         return False
-    #     current_bridge = bridge_order[bridge_idx]
-    current_bridge = find_least_connected(bridge_connectedness, occupied)
-    if current_bridge == -1:
-        return False
+    current_bridge = bridge_order[bridge_idx]
+    while current_bridge in occupied:
+        bridge_idx += 1
+        if bridge_idx == len(bridge_map):
+            return False
+        current_bridge = bridge_order[bridge_idx]
+        
+    # current_bridge = find_least_connected(bridge_connectedness, occupied)
+    # print(current_bridge)
+    # if current_bridge == -1:
+    #     return False
 
     # print(f"Bridge: {current_bridge}, Remaining Islands: {remaining_islands}")
     
@@ -153,6 +179,11 @@ def backtrack(bridge_idx, island_map, bridge_map, bridge_indices, bridge_starts,
         if bridge not in occupied:
             occupied.add(bridge)
             bridges_added.add(bridge)
+
+    old_connectedness = bridge_connectedness[current_bridge]
+    bridge_connectedness[current_bridge] = float('inf')
+
+    update_bridge_connections(connections, bridge_connectedness, current_bridge)
 
     # for index in bridge_indices[current_bridge]:
     #     occupied.add(index)
@@ -174,7 +205,18 @@ def backtrack(bridge_idx, island_map, bridge_map, bridge_indices, bridge_starts,
         if new_remaining_islands == 0:
             return True
 
-        if backtrack(bridge_idx + 1, island_map, bridge_map, bridge_indices, bridge_starts, bridge_ends, new_remaining_islands, bridge_order, bridge_overlaps, occupied):
+        if backtrack(bridge_idx + 1,
+                    island_map, 
+                    bridge_map, 
+                    bridge_indices, 
+                    bridge_starts, 
+                    bridge_ends, 
+                    new_remaining_islands, 
+                    bridge_order, 
+                    bridge_overlaps, 
+                    occupied, 
+                    bridge_connectedness, 
+                    connections):
             return True
         
         island_map[start] += num_planks
@@ -187,9 +229,28 @@ def backtrack(bridge_idx, island_map, bridge_map, bridge_indices, bridge_starts,
         
     for bridge in bridges_added:
         occupied.remove(bridge)
+    
+    # update_bridge_connections(connections, bridge_connectedness, current_bridge, True)
+    # bridge_connectedness[current_bridge] = old_connectedness
 
     # Case 2 - skip bridge
-    return backtrack(bridge_idx + 1, island_map, bridge_map, bridge_indices, bridge_starts, bridge_ends, remaining_islands, bridge_order, bridge_overlaps, occupied)
+    return backtrack(bridge_idx + 1, 
+                     island_map, 
+                     bridge_map, 
+                     bridge_indices, 
+                     bridge_starts, 
+                     bridge_ends, 
+                     remaining_islands, 
+                     bridge_order, 
+                     bridge_overlaps, 
+                     occupied, 
+                     bridge_connectedness, 
+                     connections)
+
+# Updates bridge connections
+def update_bridge_connections(bridge_connections, bridge_connectedness, bridge, remove=False):
+    for other_bridge in bridge_connections[bridge]:
+        bridge_connectedness[other_bridge] += 1 if remove else -1
 
 # Finds islands in the map
 def find_islands(map):
