@@ -15,11 +15,7 @@ def main():
     island_map = find_islands(map)
     bridge_map, bridge_indices, bridge_starts, bridge_ends = find_bridges(map)
     bridge_connectedness = find_connectedness(bridge_starts, bridge_ends)
-    bridge_overlaps = find_overlaps(bridge_indices)
-    connections = find_bridge_connections(bridge_starts, bridge_ends)
-
     bridge_order = sorted(bridge_connectedness, key=bridge_connectedness.get)
-    island_connections = find_island_connections(map)
 
     start = time.time()
     backtrack(0, 
@@ -30,40 +26,12 @@ def main():
               bridge_ends, 
               len(island_map), 
               bridge_order, 
-              bridge_overlaps, 
-              set(),
-              island_connections)
+              set())
     end = time.time()
     print(f"Time: {end - start}\n")
 
     # Print solution
     print_solution(map, bridge_map, bridge_starts, bridge_ends, bridge_indices)
-
-# Finds number of islands that an islands could be connected to
-def find_island_connections(map):
-    connections = {}
-    nrows, ncols = map.shape
-    for r in range(nrows):
-        for c in range(ncols):
-            if map[r, c] != 0:
-                connections[(r, c)] = 0
-                for i in range(r+1, nrows):
-                    if map[i, c] != 0:
-                        connections[(r, c)] += 1
-                        break
-                for i in range(r-1, -1, -1):
-                    if map[i, c] != 0:
-                        connections[(r, c)] += 1
-                        break
-                for i in range(c+1, ncols):
-                    if map[r, i] != 0:
-                        connections[(r, c)] += 1
-                        break
-                for i in range(c-1, -1, -1):
-                    if map[r, i] != 0:
-                        connections[(r, c)] += 1
-                        break
-    return connections
 
 # Finds which bridge is connected to which bridge
 def find_bridge_connections(bridge_starts, bridge_ends):
@@ -79,29 +47,6 @@ def find_bridge_connections(bridge_starts, bridge_ends):
                 if start == other_start or start == other_end or end == other_start or end == other_end:
                     connections[bridge].append(other_bridge)
     return connections
-
-# Finds the length of each bridge
-def find_bridge_length(bridge_starts, bridge_ends):
-    bridge_length = {}
-    for bridge in bridge_starts:
-        start = bridge_starts[bridge]
-        end = bridge_ends[bridge]
-        length = abs(start[0] - end[0]) + abs(start[1] - end[1])
-        bridge_length[bridge] = length
-    return bridge_length
-
-# Finds the bridges that overlap with each bridge
-def find_overlaps(bridge_indices):
-    overlaps = {}
-    for bridge in bridge_indices:
-        overlaps[bridge] = []
-        for other_bridge in bridge_indices:
-            if bridge != other_bridge:
-                for index in bridge_indices[bridge]:
-                    if index in bridge_indices[other_bridge]:
-                        overlaps[bridge].append(other_bridge)
-                        break
-    return overlaps
 
 # Finds the sum of possible bridges connected to the start and end of a bridge
 def find_connectedness(bridge_starts, bridge_ends):
@@ -147,17 +92,6 @@ def print_solution(map, bridge_map, bridge_starts, bridge_ends, bridge_indices):
     for row in result:
         print("".join(row))
 
-
-# Find the least connected bridge
-def find_least_connected(bridge_connectedness, occupied):
-    least_connected = float('inf')
-    bridge = -1
-    for b in bridge_connectedness:
-        if b not in occupied and bridge_connectedness[b] < least_connected:
-            least_connected = bridge_connectedness[b]
-            bridge = b
-    return bridge
-
 # Searches for solution 
 def backtrack(bridge_idx, 
               island_map, 
@@ -167,10 +101,7 @@ def backtrack(bridge_idx,
               bridge_ends, 
               remaining_islands, 
               bridge_order, 
-              bridge_overlaps, 
-              occupied,
-              island_connections):
-
+              occupied):
     
     # Base case - solution found
     if remaining_islands == 0:
@@ -180,36 +111,21 @@ def backtrack(bridge_idx,
     if bridge_idx == len(bridge_map):
         return False
     
-    # Find next free bridge
+    # Find next bridge
     current_bridge = bridge_order[bridge_idx]
-    while current_bridge in occupied:
-        bridge_idx += 1
-        if bridge_idx == len(bridge_map):
-            return False
-        current_bridge = bridge_order[bridge_idx]
+    
+    # Base case - bridge can't be placed due to another bridge being in its way
+    for index in bridge_indices[current_bridge]:
+        if index in occupied:
+            return backtrack(bridge_idx + 1, island_map, bridge_map, bridge_indices, bridge_starts, bridge_ends, remaining_islands, bridge_order, occupied)
 
-    print(f"Bridge: {current_bridge}, Remaining Islands: {remaining_islands}")
-        
     start = bridge_starts[current_bridge]
     end = bridge_ends[current_bridge]
 
-    if island_connections[start] == 1 and island_map[start] > min(3, island_map[start], island_map[end]):
-        return False
+    # # Case 1 - place bridge
+    for index in bridge_indices[current_bridge]:
+        occupied.add(index)
     
-    if island_connections[end] == 1 and island_map[end] > min(3, island_map[start], island_map[end]):
-        return False
-    
-
-    # Case 1 - place bridge
-    bridges_added = set()
-    for bridge in bridge_overlaps[current_bridge]:
-        if bridge not in occupied:
-            occupied.add(bridge)
-            bridges_added.add(bridge)
-
-    island_connections[start] -= 1
-    island_connections[end] -= 1
-
     for num_planks in range(min(3, island_map[start], island_map[end]), 0, -1):
 
         # Place plank
@@ -235,20 +151,16 @@ def backtrack(bridge_idx,
                     bridge_ends, 
                     new_remaining_islands, 
                     bridge_order, 
-                    bridge_overlaps, 
-                    occupied,
-                    island_connections):
+                    occupied):
             return True
         
         island_map[start] += num_planks
         island_map[end] += num_planks
-        bridge_map[current_bridge] = 0       
+        bridge_map[current_bridge] = 0
         
-    # Remove bridge
-    for bridge in bridges_added:
-        occupied.remove(bridge)
-    island_connections[start] += 1
-    island_connections[end] += 1
+    # Free up occupied indices
+    for index in bridge_indices[current_bridge]:
+        occupied.remove(index)
 
     # Case 2 - skip bridge
     return backtrack(bridge_idx + 1, 
@@ -259,9 +171,7 @@ def backtrack(bridge_idx,
                      bridge_ends, 
                      remaining_islands, 
                      bridge_order, 
-                     bridge_overlaps, 
-                     occupied,
-                    island_connections)
+                     occupied)
 
 # Finds islands in the map
 def find_islands(map):
