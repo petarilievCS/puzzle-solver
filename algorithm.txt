@@ -1,0 +1,16 @@
+# Data Structures:
+- Mapping of islands to bridges 
+- Mapping of bridges to islands
+
+for island:
+    max = sum(3 * potential bridges)
+    if island == max:
+        for bridge in island_bridges:
+            if len(island_bridges) == 1:
+                bridge = max
+            else:
+                bridge = 3
+
+
+
+
