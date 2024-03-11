@@ -8,35 +8,40 @@ import sys
 import time
 import heapq
 
+from bridge import Bridge
+from island import Island
+
 def main():
     code = ".123456789abc"
     nrow, ncol, map = scan_map()
 
     # Data Structures
     island_map = find_islands(map)
-    bridge_map, bridge_indices, bridge_starts, bridge_ends = find_bridges(map)
-    bridge_connectedness = find_connectedness(bridge_starts, bridge_ends)
+    bridge_map  = find_bridges(map)
+    find_island_bridges(bridge_map, island_map)
+
+    occupied = set()
+
+    # # Prune map
+    # prune_map(island_map,  
+    #           bridge_map, 
+    #           occupied)
+
+    bridge_connectedness = find_connectedness(bridge_map, island_map)
     bridge_order = sorted(bridge_connectedness, key=bridge_connectedness.get)
-    bridges_to_islands = find_bridge_islands(bridge_map, bridge_starts, bridge_ends)
-    islands_to_bridges = find_island_bridges(bridge_map, bridge_starts, bridge_ends)
 
     start = time.time()
     backtrack(0, 
               island_map, 
               bridge_map, 
-              bridge_indices, 
-              bridge_starts, 
-              bridge_ends, 
               len(island_map), 
               bridge_order, 
-              set(),
-              bridges_to_islands,
-              islands_to_bridges)
+              occupied)
     end = time.time()
     print(f"Time: {end - start}\n")
 
     # Print solution
-    print_solution(map, bridge_map, bridge_starts, bridge_ends, bridge_indices)
+    print_solution(map, bridge_map)
 
 # Finds a mapping of bridges to connected islands
 def find_bridge_islands(bridge_map, bridge_starts, bridge_ends):
@@ -46,20 +51,34 @@ def find_bridge_islands(bridge_map, bridge_starts, bridge_ends):
     return bridge_islands
 
 # Finds a mapping of islands to connected bridges
-def find_island_bridges(bridge_map, bridge_starts, bridge_ends):
-    island_bridges = {}
-    for bridge in bridge_map:
-        start = bridge_starts[bridge]
-        end = bridge_ends[bridge]
+def find_island_bridges(bridge_map, island_map):
+    for bridge_id in bridge_map:
+        bridge = bridge_map[bridge_id]
+        island_map[bridge.start].add_bridge(bridge_id)
+        island_map[bridge.end].add_bridge(bridge_id)
 
-        if start not in island_bridges:
-            island_bridges[start] = set()
-        if end not in island_bridges:
-            island_bridges[end] = set()
+def prune_map(island_map, 
+              bridge_map, 
+              occupied):
 
-        island_bridges[start].add(bridge)
-        island_bridges[end].add(bridge)
-    return island_bridges
+    # Forward checking
+    for island_id in island_map:
+        island = island_map[island_id]
+        if island.number != 0:
+            maximum_sum = 3 * len(island.bridges)
+
+            if len(island.bridges) == 1:
+                # Adjust bridges
+                bridge_id = island.bridges[0]
+                bridge = bridge_map[bridge_id]
+                bridge.planks = island.number
+
+                # Adjust islands
+                other_island_id = bridge.start if bridge.start != island else bridge.end
+                other_island = island_map[other_island_id]
+                other_island.number -= bridge.planks
+                island.number = 0
+                mark_occupied(occupied, bridge.indices)
 
 # Finds which bridge is connected to which bridge
 def find_bridge_connections(bridge_starts, bridge_ends):
@@ -77,25 +96,17 @@ def find_bridge_connections(bridge_starts, bridge_ends):
     return connections
 
 # Finds the sum of possible bridges connected to the start and end of a bridge
-def find_connectedness(bridge_starts, bridge_ends):
-    # Mapping of index to bridges connected to it
-    index_connectedness = {}
-
-    for start in bridge_starts.values():
-        index_connectedness[start] = index_connectedness.get(start, 0) + 1
-
-    for end in bridge_ends.values():
-        index_connectedness[end] = index_connectedness.get(end, 0) + 1
-
+def find_connectedness(bridge_map, island_map):
     # Mapping of bridge to connectedness
     bridge_connectedness = {}
-    for bridge in bridge_starts:
-        bridge_connectedness[bridge] = index_connectedness[bridge_starts[bridge]] + index_connectedness[bridge_ends[bridge]]
+    for bridge_id in bridge_map:
+        bridge = bridge_map[bridge_id]
+        bridge_connectedness[bridge_id] = len(island_map[bridge.start].bridges) + len(island_map[bridge.end].bridges)
 
     return bridge_connectedness
 
 # Prints solution
-def print_solution(map, bridge_map, bridge_starts, bridge_ends, bridge_indices):
+def print_solution(map, bridge_map):
     result = []
     nrows, ncols = map.shape
     code = " 123456789abc"
@@ -110,13 +121,13 @@ def print_solution(map, bridge_map, bridge_starts, bridge_ends, bridge_indices):
     vertical_bridge = {1: "│", 2: "\"", 3: "#"}
 
     # Add bridges
-    for bridge in bridge_map:
-        if bridge_map[bridge] != 0:
-            horziontal = bridge_starts[bridge][0] == bridge_ends[bridge][0]
-            symbol = horizontal_bridge[bridge_map[bridge]] if horziontal else vertical_bridge[bridge_map[bridge]]
-            for (row, col) in bridge_indices[bridge]:
-                    result[row][col] = symbol
+    for bridge_id in bridge_map:
+        bridge = bridge_map[bridge_id]
 
+        if bridge.planks != 0:
+            symbol = horizontal_bridge[bridge.planks] if bridge.horizontal else vertical_bridge[bridge.planks]
+            for (row, col) in bridge.indices:
+                    result[row][col] = symbol
     for row in result:
         print("".join(row))
 
@@ -124,14 +135,9 @@ def print_solution(map, bridge_map, bridge_starts, bridge_ends, bridge_indices):
 def backtrack(bridge_idx, 
               island_map, 
               bridge_map,
-              bridge_indices, 
-              bridge_starts, 
-              bridge_ends, 
               remaining_islands, 
               bridge_order, 
-              occupied,
-              bridges_to_islands,
-              islands_to_bridges):
+              occupied):
     
     # Base case - solution found
     if remaining_islands == 0:
@@ -141,96 +147,97 @@ def backtrack(bridge_idx,
     if bridge_idx == len(bridge_map):
         return False
     
-    # Forward checking
-    
-    
     # Find next bridge
-    current_bridge = bridge_order[bridge_idx]
+    current_bridge_id = bridge_order[bridge_idx]
+    current_bridge = bridge_map[current_bridge_id]
 
-    print(f"Current bridge: {current_bridge}")
+    # if bridge_map[current_bridge] != 0:
+    #     return backtrack(bridge_idx + 1, 
+    #                      island_map, 
+    #                      bridge_map, 
+    #                      bridge_indices, 
+    #                      bridge_starts, 
+    #                      bridge_ends, 
+    #                      remaining_islands, 
+    #                      bridge_order, 
+    #                      occupied,
+    #                      islands_to_bridges)    
+
+    # rint(f"Current bridge: {current_bridge}")
     
     # Base case - bridge can't be placed due to another bridge being in its way
-    for index in bridge_indices[current_bridge]:
+
+    for index in current_bridge.indices:
         if index in occupied:
             return backtrack(bridge_idx + 1, 
                              island_map, 
                              bridge_map, 
-                             bridge_indices, 
-                             bridge_starts, 
-                             bridge_ends, 
                              remaining_islands, 
                              bridge_order, 
-                             occupied,
-                             bridges_to_islands,
-                             islands_to_bridges)
+                             occupied)
 
-    start = bridge_starts[current_bridge]
-    end = bridge_ends[current_bridge]
+    start = current_bridge.start
+    start_island = island_map[start]
+    end = current_bridge.end
+    end_island = island_map[end]
 
     # # Case 1 - place bridge
-    for index in bridge_indices[current_bridge]:
-        occupied.add(index)
+    mark_occupied(occupied, current_bridge.indices)
     
-    for num_planks in range(min(3, island_map[start], island_map[end]), 0, -1):
-
+    for num_planks in range(min(3, start_island.number, end_island.number), 0, -1):
         # Place plank
-        bridge_map[current_bridge] = num_planks
-        island_map[start] -= num_planks
-        island_map[end] -= num_planks
+        current_bridge.planks = num_planks
+        start_island.number -= num_planks
+        end_island.number -= num_planks
 
         # Adjust number of remaining islands
         new_remaining_islands = remaining_islands
-        if island_map[start] == 0:
+        if start_island.number == 0:
             new_remaining_islands -= 1
-        if island_map[end] == 0:
+        if end_island.number == 0:
             new_remaining_islands -= 1
-
         if new_remaining_islands == 0:
             return True
 
         if backtrack(bridge_idx + 1,
                     island_map, 
                     bridge_map, 
-                    bridge_indices, 
-                    bridge_starts, 
-                    bridge_ends, 
                     new_remaining_islands, 
                     bridge_order, 
-                    occupied,
-                    bridges_to_islands,
-                    islands_to_bridges):
+                    occupied):
             return True
         
-        island_map[start] += num_planks
-        island_map[end] += num_planks
-        bridge_map[current_bridge] = 0
+        start_island.number += num_planks
+        end_island.number += num_planks
+        current_bridge.planks = 0
         
     # Free up occupied indices
-    for index in bridge_indices[current_bridge]:
+    for index in current_bridge.indices:
         occupied.remove(index)
 
     # Case 2 - skip bridge
     return backtrack(bridge_idx + 1, 
                      island_map, 
                      bridge_map, 
-                     bridge_indices, 
-                     bridge_starts, 
-                     bridge_ends, 
                      remaining_islands, 
                      bridge_order, 
-                     occupied,
-                     bridges_to_islands,
-                     islands_to_bridges)
+                     occupied)
+
+# Marks bridge indices as occupied
+def mark_occupied(occupied, bridge_indices):
+    for index in bridge_indices:
+        occupied.add(index)
 
 # Finds islands in the map
 def find_islands(map):
     islands = {}
     nrow, ncol = map.shape
-
+    
     for r in range(nrow):
         for c in range(ncol):
             if map[r,c] != 0:
-                islands[(r, c)] = map[r,c]
+                island = Island(r, c, map[r,c])
+                islands[(r, c)] = island
     return islands
 
 # Finds bridges in the map
@@ -240,10 +247,7 @@ def find_bridges(map):
     num_bridges = 0
 
     # Data Structures
-    bridge_map = {} # mapping of brdiges to # of planks
-    bridge_indices = {} # mapping of bridges to indices occupied
-    bridge_starts = {}
-    bridge_ends = {}
+    bridge_map = {} # mapping of brdige IDs to bridges
 
     # Perform horizontal search
     for r in range(nrow):
@@ -260,16 +264,10 @@ def find_bridges(map):
             for c in range(island_a+1, ncol):
                 if map[r, c] != 0:
                     island_b = c
-                    bridge_starts[num_bridges] = (r, island_a)
-                    bridge_ends[num_bridges] = (r, island_b)
-                    bridge_map[num_bridges] = 0
-                    bridge_indices[num_bridges] = []
-
-                    for i in range(island_a+1, island_b):
-                        bridge_indices[num_bridges].append((r, i))
+                    bridge = Bridge(num_bridges, (r, island_a), (r, island_b), True)
+                    bridge_map[num_bridges] = bridge
                     num_bridges += 1
                     island_a = island_b
-
 
     # Perform vertical search
     for c in range(ncol):
@@ -286,16 +284,12 @@ def find_bridges(map):
             for r in range(island_a+1, nrow):
                 if map[r, c] != 0:
                     island_b = r
-                    bridge_starts[num_bridges] = (island_a, c)
-                    bridge_ends[num_bridges] = (island_b, c)
-                    bridge_map[num_bridges] = 0
-                    bridge_indices[num_bridges] = []
-                    for i in range(island_a+1, island_b):
-                        bridge_indices[num_bridges].append((i, c))
+                    bridge = Bridge(num_bridges, (island_a, c), (island_b, c), False)
+                    bridge_map[num_bridges] = bridge
                     num_bridges += 1
                     island_a = island_b
 
-    return bridge_map, bridge_indices, bridge_starts, bridge_ends
+    return bridge_map
         
 def scan_map():
     text = []
