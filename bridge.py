@@ -6,6 +6,7 @@ class Bridge(object):
         self.start = start
         self.end = end
         self.horizontal = horizontal
+        self.done = False
 
         self.indices = []
         if horizontal:
