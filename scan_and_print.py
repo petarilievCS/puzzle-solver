@@ -22,10 +22,10 @@ def main():
 
     occupied = set()
 
-    # # Prune map
-    # prune_map(island_map,  
-    #           bridge_map, 
-    #           occupied)
+    # Prune map
+    islands_removed = prune_map(island_map,  
+              bridge_map, 
+              occupied)
 
     bridge_connectedness = find_connectedness(bridge_map, island_map)
     bridge_order = sorted(bridge_connectedness, key=bridge_connectedness.get)
@@ -34,7 +34,7 @@ def main():
     backtrack(0, 
               island_map, 
               bridge_map, 
-              len(island_map), 
+              len(island_map) - islands_removed, 
               bridge_order, 
               occupied)
     end = time.time()
@@ -60,25 +60,41 @@ def find_island_bridges(bridge_map, island_map):
 def prune_map(island_map, 
               bridge_map, 
               occupied):
+    
+    islands_removed = 0
 
     # Forward checking
-    for island_id in island_map:
-        island = island_map[island_id]
-        if island.number != 0:
-            maximum_sum = 3 * len(island.bridges)
+    while True:
+        print()
+        changes_made = False
+        for island_id in island_map:
+            island = island_map[island_id]
+            if island.number != 0:
 
-            if len(island.bridges) == 1:
-                # Adjust bridges
-                bridge_id = island.bridges[0]
-                bridge = bridge_map[bridge_id]
-                bridge.planks = island.number
+                maximum_sum = 3 * len(island.bridges)
 
-                # Adjust islands
-                other_island_id = bridge.start if bridge.start != island else bridge.end
-                other_island = island_map[other_island_id]
-                other_island.number -= bridge.planks
-                island.number = 0
-                mark_occupied(occupied, bridge.indices)
+                if len(island.bridges) == 1:
+                    print("Runs")
+                    changes_made = True
+                    islands_removed += 1
+
+                    # Adjust bridges
+                    bridge_id = island.bridges[0]
+                    bridge = bridge_map[bridge_id]
+                    bridge.planks = island.number
+
+                    # Adjust islands
+                    other_island_id = bridge.start if bridge.start != island_id else bridge.end
+                    other_island = island_map[other_island_id]
+                    other_island.number -= bridge.planks
+                    other_island.bridges.remove(bridge_id)
+                    island.number = 0
+                    mark_occupied(occupied, bridge.indices)
+
+        if not changes_made:
+            return islands_removed
+
+    return islands_removed
 
 # Finds which bridge is connected to which bridge
 def find_bridge_connections(bridge_starts, bridge_ends):
@@ -151,22 +167,15 @@ def backtrack(bridge_idx,
     current_bridge_id = bridge_order[bridge_idx]
     current_bridge = bridge_map[current_bridge_id]
 
-    # if bridge_map[current_bridge] != 0:
-    #     return backtrack(bridge_idx + 1, 
-    #                      island_map, 
-    #                      bridge_map, 
-    #                      bridge_indices, 
-    #                      bridge_starts, 
-    #                      bridge_ends, 
-    #                      remaining_islands, 
-    #                      bridge_order, 
-    #                      occupied,
-    #                      islands_to_bridges)    
-
-    # rint(f"Current bridge: {current_bridge}")
+    if current_bridge.planks != 0:
+        return backtrack(bridge_idx + 1, 
+                         island_map, 
+                         bridge_map, 
+                         remaining_islands, 
+                         bridge_order, 
+                         occupied)    
     
     # Base case - bridge can't be placed due to another bridge being in its way
-
     for index in current_bridge.indices:
         if index in occupied:
             return backtrack(bridge_idx + 1, 
