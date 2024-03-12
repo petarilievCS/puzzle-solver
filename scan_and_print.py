@@ -26,6 +26,8 @@ def main():
     islands_removed = prune_map(island_map,  
               bridge_map, 
               occupied)
+    
+    forward_checking(island_map, bridge_map)
 
     bridge_connectedness = find_connectedness(bridge_map, island_map)
     bridge_order = sorted(bridge_connectedness, key=bridge_connectedness.get)
@@ -114,6 +116,24 @@ def forward_checking(island_map, bridge_map):
         island.max = max(3, island.number)
     
     # Max search
+    for island_id in island_map:
+        island = island_map[island_id]
+        for bridge_id in island.bridges:
+            bridge = bridge_map[bridge_id]
+
+            # Find sum of all other bridges
+            max_sum = 0
+            for other_bridge_id in island.bridges:
+                if other_bridge_id != bridge_id:
+                    other_bridge = bridge_map[other_bridge_id]
+                    max_sum += other_bridge.maximum
+            
+            diff = island.number - max_sum
+
+            if diff > bridge.minimum:
+                print(f"Island: {island_id} - Bridge: {bridge_id} - Diff: {diff} - Min: {bridge.minimum}")
+
+            bridge.minimum = max(bridge.minimum, diff)
         
     # Min search
 
@@ -313,10 +333,8 @@ def backtrack(bridge_idx,
     # # Case 1 - place bridge
     mark_occupied(occupied, current_bridge.indices)
     
-    # start_planks = min(3, start_island.number, end_island.number, current_bridge.maximum)
-    # end_planks = max(0, current_bridge.minimum)
-    start_planks = min(3, start_island.number, end_island.number)
-    end_planks = 0
+    start_planks = min(3, start_island.number, end_island.number, current_bridge.maximum)
+    end_planks = max(0, current_bridge.minimum - 1)
 
     for num_planks in range(start_planks, end_planks, -1):
         # Place plank
@@ -350,12 +368,14 @@ def backtrack(bridge_idx,
         occupied.remove(index)
 
     # Case 2 - skip bridge
-    return backtrack(bridge_idx + 1, 
-                     island_map, 
-                     bridge_map, 
-                     remaining_islands, 
-                     bridge_order, 
-                     occupied)
+    if current_bridge.minimum == 0:
+        return backtrack(bridge_idx + 1, 
+                        island_map, 
+                        bridge_map, 
+                        remaining_islands, 
+                        bridge_order, 
+                        occupied)
+    return False
 
 # Marks bridge indices as occupied
 def mark_occupied(occupied, bridge_indices):

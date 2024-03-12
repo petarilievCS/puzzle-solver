@@ -7,6 +7,8 @@ class Bridge(object):
         self.end = end
         self.horizontal = horizontal
         self.done = False
+        self.maximum = 3
+        self.minimum = 0
 
         self.indices = []
         if horizontal:
