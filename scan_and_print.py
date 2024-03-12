@@ -116,27 +116,55 @@ def forward_checking(island_map, bridge_map):
         island.max = max(3, island.number)
     
     # Max search
-    for island_id in island_map:
-        island = island_map[island_id]
-        for bridge_id in island.bridges:
-            bridge = bridge_map[bridge_id]
+    changes_made = True
+    while changes_made:
+        changes_made = False
+        for island_id in island_map:
+            island = island_map[island_id]
+            for bridge_id in island.bridges:
+                bridge = bridge_map[bridge_id]
 
-            # Find sum of all other bridges
-            max_sum = 0
-            for other_bridge_id in island.bridges:
-                if other_bridge_id != bridge_id:
-                    other_bridge = bridge_map[other_bridge_id]
-                    max_sum += other_bridge.maximum
-            
-            diff = island.number - max_sum
+                # Find sum of all other bridges
+                max_sum = 0
+                for other_bridge_id in island.bridges:
+                    if other_bridge_id != bridge_id:
+                        other_bridge = bridge_map[other_bridge_id]
+                        max_sum += other_bridge.maximum
+                
+                diff = island.number - max_sum
 
-            if diff > bridge.minimum:
-                print(f"Island: {island_id} - Bridge: {bridge_id} - Diff: {diff} - Min: {bridge.minimum}")
+                if diff > bridge.minimum:
+                    print(f"Island: {island_id} - Bridge: {bridge_id} - Diff: {diff} - Min: {bridge.minimum}")
+                    changes_made = True
 
-            bridge.minimum = max(bridge.minimum, diff)
+                old_minimum = bridge.minimum
+                bridge.minimum = max(bridge.minimum, diff)
+                if bridge.minimum != old_minimum:
+                    changes_made = True
         
-    # Min search
+        for island_id in island_map:
+            island = island_map[island_id]
+            for bridge_id in island.bridges:
+                bridge = bridge_map[bridge_id]
 
+                # Find sum of all other bridges
+                min_sum = 0
+                for other_bridge_id in island.bridges:
+                    if other_bridge_id != bridge_id:
+                        other_bridge = bridge_map[other_bridge_id]
+                        min_sum += other_bridge.minimum
+                
+                diff = island.number - min_sum
+
+                if diff < bridge.maximum:
+                    print(f"Island: {island_id} - Bridge: {bridge_id} - Diff: {diff} - Max: {bridge.maximum}")
+                    changes_made = True
+
+                old_maximum = bridge.maximum
+                bridge.maximum = min(bridge.maximum, diff)
+                if bridge.maximum != old_maximum:
+                    changes_made = True               
+    
 # Finds a mapping of bridges to connected islands
 def find_bridge_islands(bridge_map, bridge_starts, bridge_ends):
     bridge_islands = {}
