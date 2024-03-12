@@ -65,7 +65,6 @@ def prune_map(island_map,
 
     # Forward checking
     while True:
-        print()
         changes_made = False
         for island_id in island_map:
             island = island_map[island_id]
@@ -74,7 +73,7 @@ def prune_map(island_map,
                 maximum_sum = 3 * len(island.bridges)
 
                 if len(island.bridges) == 1:
-                    print("Runs")
+
                     changes_made = True
                     islands_removed += 1
 
@@ -90,6 +89,26 @@ def prune_map(island_map,
                     other_island.bridges.remove(bridge_id)
                     island.number = 0
                     mark_occupied(occupied, bridge.indices)
+
+                elif maximum_sum == island.number:
+                    print("Runs")
+                    changes_made = True
+                    islands_removed += 1
+
+                    # Adjust bridges
+                    for bridge_id in island.bridges:
+                        bridge = bridge_map[bridge_id]
+                        bridge.planks = 3
+
+                    # Adjust islands
+                    island.number = 0
+                    for bridge_id in island.bridges:
+                        bridge = bridge_map[bridge_id]
+                        other_island_id = bridge.start if bridge.start != island_id else bridge.end
+                        other_island = island_map[other_island_id]
+                        other_island.number -= 3
+                        other_island.bridges.remove(bridge_id)
+                        mark_occupied(occupied, bridge.indices)
 
         if not changes_made:
             return islands_removed
@@ -117,7 +136,8 @@ def find_connectedness(bridge_map, island_map):
     bridge_connectedness = {}
     for bridge_id in bridge_map:
         bridge = bridge_map[bridge_id]
-        bridge_connectedness[bridge_id] = len(island_map[bridge.start].bridges) + len(island_map[bridge.end].bridges)
+        if bridge.planks == 0:
+            bridge_connectedness[bridge_id] = len(island_map[bridge.start].bridges) + len(island_map[bridge.end].bridges)
 
     return bridge_connectedness
 
@@ -160,7 +180,7 @@ def backtrack(bridge_idx,
         return True
     
     # Base case - no more bridges
-    if bridge_idx == len(bridge_map):
+    if bridge_idx == len(bridge_order):
         return False
     
     # Find next bridge
