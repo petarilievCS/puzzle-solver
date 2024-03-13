@@ -22,21 +22,17 @@ def main():
 
     occupied = set()
 
-    # Prune map
-    islands_removed = prune_map(island_map,  
-              bridge_map, 
-              occupied)
-    
-    forward_checking(island_map, bridge_map)
+    initial_forward_check(island_map, bridge_map)
+    print_solution(map, bridge_map)
 
     bridge_connectedness = find_connectedness(bridge_map, island_map)
-    bridge_order = sorted(bridge_connectedness, key=bridge_connectedness.get)
+    bridge_order = sorted(bridge_connectedness, key=bridge_connectedness.get, reverse=False)
 
     start = time.time()
     backtrack(0, 
               island_map, 
               bridge_map, 
-              len(island_map) - islands_removed, 
+              len(island_map), 
               bridge_order, 
               occupied)
     end = time.time()
@@ -45,70 +41,33 @@ def main():
     # Print solution
     print_solution(map, bridge_map)
 
-# Performs forward checking algorithm - GPT Version
-def forward_checking_gpt(island_map, bridge_map):
+# Performs forward checking on constraints
+def forward_check(bridge_map, island_map):
+    
+    x = 0
 
-    # Variables
-    islands_removed = 0
-    changes_made = False
+    for island_id in island_map:
+        island = island_map[island_id]
+        total_sum = 0
+        for bridge_id in island.bridges:
+            bridge = bridge_map[bridge_id]
+            total_sum += bridge.maximum
 
-    # Forward checking
-    while True:
-        for island_id in island_map:
-            island = island_map[island_id]
-
-            if island.number != 0  and len(island.bridges) > 0:
-                maximum_sum = 3 * len(island.bridges)
-
-                if len(island.bridges) == 1:
-                    changes_made = True
-                    islands_removed += 1
-
-                    # Adjust bridges
-                    bridge_id = island.bridges[0]
-                    bridge = bridge_map[bridge_id]
-                    bridge.planks = island.number
-
-                    # Adjust islands
-                    other_island_id = bridge.start if bridge.start != island_id else bridge.end
-                    other_island = island_map[other_island_id]
-                    other_island.number -= bridge.planks
-                    other_island.bridges.remove(bridge_id)
-                    island.number = 0
-
-                    if other_island.number == 0:
-                        islands_removed += 1
-                        mark_island_bridges_done(island_map, bridge_map, other_island_id)
-
-                elif maximum_sum == island.number:
-                    changes_made = True
-                    islands_removed += 1
-
-                    # Adjust bridges
-                    for bridge_id in island.bridges:
-                        bridge = bridge_map[bridge_id]
-                        bridge.planks = 3
-
-                    # Adjust islands
-                    island.number = 0
-                    for bridge_id in island.bridges:
-                        bridge = bridge_map[bridge_id]
-                        other_island_id = bridge.start if bridge.start != island_id else bridge.end
-                        other_island = island_map[other_island_id]
-                        other_island.number -= 3
-                        other_island.bridges.remove(bridge_id)
-
-                        if other_island.number == 0:
-                            islands_removed += 1
-                            mark_island_bridges_done(island_map, bridge_map, other_island_id)
-
-        if not changes_made:
-            return islands_removed
-
-    return islands_removed
+        if island.number > total_sum:
+            return False
+    
+        total_sum = 0
+        for bridge_id in island.bridges:
+            bridge = bridge_map[bridge_id]
+            total_sum += bridge.minimum
+        
+        if island.number < total_sum:
+            return False
+    
+    return True
 
 # Performs forward checking algorithm
-def forward_checking(island_map, bridge_map):
+def initial_forward_check(island_map, bridge_map, print=False):
 
     # Sets max
     for island_id in island_map:
@@ -118,6 +77,15 @@ def forward_checking(island_map, bridge_map):
     # Max search
     changes_made = True
     while changes_made:
+
+        islands_to_be_removed = []
+        for island_id in island_map:
+            island = island_map[island_id]
+            if island.number == 0:
+                islands_to_be_removed.append(island_id)
+        for island_id in islands_to_be_removed:
+            island_map.pop(island_id)
+
         changes_made = False
         for island_id in island_map:
             island = island_map[island_id]
@@ -134,13 +102,18 @@ def forward_checking(island_map, bridge_map):
                 diff = island.number - max_sum
 
                 if diff > bridge.minimum:
-                    print(f"Island: {island_id} - Bridge: {bridge_id} - Diff: {diff} - Min: {bridge.minimum}")
+                    if print:
+                        print(f"Island: {island_id} - Bridge: {bridge_id} - Diff: {diff} - Min: {bridge.minimum}")
                     changes_made = True
 
                 old_minimum = bridge.minimum
                 bridge.minimum = max(bridge.minimum, diff)
                 if bridge.minimum != old_minimum:
                     changes_made = True
+
+                if bridge.minimum == bridge.maximum:
+                    place_bridge(bridge_id, bridge.minimum, bridge_map, island_map)
+                    bridge.done = True
         
         for island_id in island_map:
             island = island_map[island_id]
@@ -157,20 +130,31 @@ def forward_checking(island_map, bridge_map):
                 diff = island.number - min_sum
 
                 if diff < bridge.maximum:
-                    print(f"Island: {island_id} - Bridge: {bridge_id} - Diff: {diff} - Max: {bridge.maximum}")
+                    if print:
+                        print(f"Island: {island_id} - Bridge: {bridge_id} - Diff: {diff} - Max: {bridge.maximum}")
                     changes_made = True
 
                 old_maximum = bridge.maximum
                 bridge.maximum = min(bridge.maximum, diff)
                 if bridge.maximum != old_maximum:
-                    changes_made = True               
-    
-# Finds a mapping of bridges to connected islands
-def find_bridge_islands(bridge_map, bridge_starts, bridge_ends):
-    bridge_islands = {}
-    for bridge in bridge_map:
-        bridge_islands[bridge] = (bridge_starts[bridge], bridge_ends[bridge])
-    return bridge_islands
+                    changes_made = True             
+
+                if bridge.minimum == bridge.maximum:
+                    place_bridge(bridge_id, bridge.minimum, bridge_map, island_map)
+                    bridge.done = True
+
+def place_bridge(bridge_id, planks, bridge_map, island_map):
+    if planks != 0:
+        bridge = bridge_map[bridge_id]
+        start_island = island_map[bridge.start]
+        end_island = island_map[bridge.end]
+
+        start_island.number -= planks
+        end_island.number -= planks
+
+        start_island.bridges.remove(bridge_id)
+        end_island.bridges.remove(bridge_id)
+        bridge.planks = planks
 
 # Finds a mapping of islands to connected bridges
 def find_island_bridges(bridge_map, island_map):
@@ -178,81 +162,6 @@ def find_island_bridges(bridge_map, island_map):
         bridge = bridge_map[bridge_id]
         island_map[bridge.start].add_bridge(bridge_id)
         island_map[bridge.end].add_bridge(bridge_id)
-
-def prune_map(island_map, 
-              bridge_map, 
-              occupied):
-    
-    islands_removed = 0
-
-    # Forward checking
-    while True:
-        changes_made = False
-        for island_id in island_map:
-            island = island_map[island_id]
-
-            # print(f"Island: {island_id} - {island.number} - {island.bridges}")
-
-
-            # and len(island.bridges) > 0
-            if island.number != 0:
-                maximum_sum = 3 * len(island.bridges)
-
-                if len(island.bridges) == 1:
-
-                    # print("Runs 1")
-                        
-                    changes_made = True
-                    islands_removed += 1
-
-                    # Adjust bridges
-                    bridge_id = island.bridges[0]
-                    bridge = bridge_map[bridge_id]
-                    bridge.planks = island.number
-
-                    # Adjust islands
-                    other_island_id = bridge.start if bridge.start != island_id else bridge.end
-                    other_island = island_map[other_island_id]
-                    other_island.number -= bridge.planks
-                    other_island.bridges.remove(bridge_id)
-                    island.number = 0
-                    mark_occupied(occupied, bridge.indices)
-
-                    if other_island.number == 0:
-                        islands_removed += 1
-                        mark_island_bridges_done(island_map, bridge_map, other_island_id)
-
-                elif maximum_sum == island.number:
-
-                    # print("Runs max")
-
-                    changes_made = True
-                    islands_removed += 1
-
-                    # Adjust bridges
-                    for bridge_id in island.bridges:
-                        bridge = bridge_map[bridge_id]
-                        bridge.planks = 3
-
-                    # Adjust islands
-                    island.number = 0
-                    for bridge_id in island.bridges:
-                        bridge = bridge_map[bridge_id]
-                        other_island_id = bridge.start if bridge.start != island_id else bridge.end
-                        other_island = island_map[other_island_id]
-                        other_island.number -= 3
-                        other_island.bridges.remove(bridge_id)
-                        mark_occupied(occupied, bridge.indices)
-
-                        if other_island.number == 0:
-                            islands_removed += 1
-                            mark_island_bridges_done(island_map, bridge_map, other_island_id)
-
-        if not changes_made:
-            # print(f"Islands removed: {islands_removed}")
-            return islands_removed
-
-    return islands_removed
 
 # Marks all of an island's bridges as done
 def mark_island_bridges_done(island_map, bridge_map, island_id):
@@ -283,7 +192,11 @@ def find_connectedness(bridge_map, island_map):
     for bridge_id in bridge_map:
         bridge = bridge_map[bridge_id]
         if bridge.planks == 0 and bridge.done == False:
-            bridge_connectedness[bridge_id] = len(island_map[bridge.start].bridges) + len(island_map[bridge.end].bridges)
+            bridge_connectedness[bridge_id] = 0
+            if bridge.start in island_map:
+                bridge_connectedness[bridge_id] += len(island_map[bridge.start].bridges)
+            if bridge.end in island_map:
+                bridge_connectedness[bridge_id] += len(island_map[bridge.end].bridges)
 
     return bridge_connectedness
 
@@ -320,8 +233,6 @@ def backtrack(bridge_idx,
               remaining_islands, 
               bridge_order, 
               occupied):
-    
-    # print(f"Bridge idx: {bridge_idx} - Remaining islands: {remaining_islands}")
 
     # Base case - solution found
     if remaining_islands == 0:
@@ -331,11 +242,14 @@ def backtrack(bridge_idx,
     if bridge_idx == len(bridge_order):
         return False
     
+    if not forward_check(bridge_map, island_map):
+        return False
+
     # Find next bridge
     current_bridge_id = bridge_order[bridge_idx]
     current_bridge = bridge_map[current_bridge_id]
 
-    if current_bridge.planks != 0:
+    if current_bridge.done:
         return backtrack(bridge_idx + 1, 
                          island_map, 
                          bridge_map, 
@@ -354,8 +268,17 @@ def backtrack(bridge_idx,
                              occupied)
 
     start = current_bridge.start
-    start_island = island_map[start]
     end = current_bridge.end
+
+    if start not in island_map or end not in island_map:
+        return backtrack(bridge_idx + 1, 
+                         island_map, 
+                         bridge_map, 
+                         remaining_islands, 
+                         bridge_order, 
+                         occupied)
+
+    start_island = island_map[start]
     end_island = island_map[end]
 
     # # Case 1 - place bridge
@@ -364,11 +287,21 @@ def backtrack(bridge_idx,
     start_planks = min(3, start_island.number, end_island.number, current_bridge.maximum)
     end_planks = max(0, current_bridge.minimum - 1)
 
+    old_max = current_bridge.maximum
+    old_min = current_bridge.minimum
+    start_island.bridges.remove(current_bridge_id)
+    end_island.bridges.remove(current_bridge_id)
+    current_bridge.done = True
+
     for num_planks in range(start_planks, end_planks, -1):
+        
         # Place plank
         current_bridge.planks = num_planks
         start_island.number -= num_planks
         end_island.number -= num_planks
+
+        current_bridge.maximum = num_planks
+        current_bridge.minimum = num_planks
 
         # Adjust number of remaining islands
         new_remaining_islands = remaining_islands
@@ -394,6 +327,13 @@ def backtrack(bridge_idx,
     # Free up occupied indices
     for index in current_bridge.indices:
         occupied.remove(index)
+
+    current_bridge.maximum = old_max
+    current_bridge.minimum = old_min
+    current_bridge.done = False
+
+    start_island.bridges.append(current_bridge_id)
+    end_island.bridges.append(current_bridge_id)
 
     # Case 2 - skip bridge
     if current_bridge.minimum == 0:
