@@ -1,3 +1,18 @@
+#!/usr/bin/python3.9.6
+
+# Alborithm Description
+#   My algorithm is based on backtracking, but also involves a few heuristics to reduce the search space. 
+#   Firstly, the function initial_forward_check is invoked. This function traverses initial puzzle and assigns 
+#   new minimum and maximum values to bridges. The formula that is used is this one: new_max = min(current_max, n - sum) 
+#   where n is the number on the current insland and sum is the sum of the other bridges. The same logic is applied to 
+#   min values. This leads to a much smaller search space.
+# 
+#   Furthermore, another forward check is triggered whenever a bridge is placed, to ensure that all bridges still 
+#   have possible values. If a bridge has no possible values, it backtracks.
+#   
+#   When it comes to choose the next bridge to be assigned, I chose the bridge with the lowest connectedness, where
+#   connectedness is the sum of bridges connected to its start and end islands.
+
 #************************************************************
 #   scan_print_map.py
 #   Scan a hashi puzzle from stdin, store it in a numpy array,
@@ -13,7 +28,7 @@ from island import Island
 
 def main():
     code = ".123456789abc"
-    nrow, ncol, map = scan_map()
+    map = scan_map()
 
     # Data Structures
     island_map = find_islands(map)
@@ -21,14 +36,11 @@ def main():
     find_island_bridges(bridge_map, island_map)
 
     occupied = set()
-
     initial_forward_check(island_map, bridge_map)
-    print_solution(map, bridge_map)
 
     bridge_connectedness = find_connectedness(bridge_map, island_map)
     bridge_order = sorted(bridge_connectedness, key=bridge_connectedness.get, reverse=False)
 
-    start = time.time()
     backtrack(0, 
               island_map, 
               bridge_map, 
@@ -36,7 +48,6 @@ def main():
               bridge_order, 
               occupied)
     end = time.time()
-    print(f"Time: {end - start}\n")
 
     # Print solution
     print_solution(map, bridge_map)
