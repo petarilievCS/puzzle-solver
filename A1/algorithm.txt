@@ -1,0 +1,48 @@
+./# Data Structures:
+- Mapping of islands to bridges 
+- Mapping of bridges to islands
+
+for island:
+    max = sum(3 * potential bridges)
+    if island == max:
+        for bridge in island_bridges:
+            if len(island_bridges) == 1:
+                bridge = max
+            else:
+                bridge = 3
+
+
+    # Forward checking
+    for island in island_map:
+        if island_map[island] != 0:
+            print(island)
+            print(island_map[island])
+            required_sum = island_map[island]
+            maximum_sum = 3 * len(islands_to_bridges[island])
+
+            # print(islands_to_bridges)
+
+            if len(islands_to_bridges[island]) == 1:
+                print(island)
+                bridge = islands_to_bridges[island][0]
+                bridge_map[bridge] = required_sum
+                
+                start = bridge_starts[bridge]
+                end = bridge_ends[bridge]
+                other_island = start if start != island else end
+                island_map[other_island] -= required_sum
+                island_map[island] = 0
+
+                mark_occupied(bridge, occupied, bridge_indices)
+                # bridge_order.remove(bridge)
+                
+                bridges_to_islands.pop(bridge)
+                islands_to_bridges.pop(island)
+
+        
+        # if required_sum == maximum_sum:
+        #     if len(islands_to_bridges[island]) == 1:
+        #         bridge = islands_to_bridges[island[0]]
+        #         bridge_map[bridge] = required_sum
+
+
